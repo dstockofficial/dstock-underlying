@@ -163,6 +163,16 @@ contract DStockUnderlying is
         _burn(from, amount);
     }
 
+    /// @notice Override inherited burn function to enforce role-based access control
+    function burn(uint256 value) public override onlyRole(BURNER_ROLE) {
+        super.burn(value);
+    }
+
+    /// @notice Override inherited burnFrom function to enforce role-based access control
+    function burnFrom(address account, uint256 value) public override onlyRole(BURNER_ROLE) {
+        super.burnFrom(account, value);
+    }
+
     /// @dev Check compliance for an account, reverts if non-compliant
     function _checkCompliance(address account) internal view {
         if (address(compliance) == address(0)) {

@@ -396,7 +396,7 @@ contract DStockUnderlyingTest is Test {
     function test_BurnEmitsTransfer() public {
         uint256 mintAmount = 1000e18;
         uint256 burnAmount = 300e18;
-        
+
         vm.prank(admin);
         underlying.mint(user1, mintAmount);
 
@@ -404,6 +404,58 @@ contract DStockUnderlyingTest is Test {
         vm.expectEmit(true, true, false, true);
         emit IERC20.Transfer(user1, address(0), burnAmount);
         underlying.burn(user1, burnAmount);
+    }
+
+    // ============ Inherited Burn Function Vulnerability Tests ============
+
+    function test_InheritedBurnBypassesRoleRestriction() public {
+        uint256 mintAmount = 1000e18;
+        uint256 burnAmount = 100e18;
+
+        // Mint tokens to user1
+        vm.prank(admin);
+        underlying.mint(user1, mintAmount);
+
+        // Verify user1 has no BURNER_ROLE
+        assertFalse(underlying.hasRole(underlying.BURNER_ROLE(), user1));
+
+        // User1 should NOT be able to call the custom burn(address, uint256) function
+        vm.prank(user1);
+        vm.expectRevert();
+        underlying.burn(user1, burnAmount);
+
+        // User1 should also NOT be able to call the inherited burn(uint256) function
+        // This SHOULD fail but currently succeeds due to the vulnerability
+        vm.prank(user1);
+        vm.expectRevert(); // This should revert but currently doesn't - SECURITY VULNERABILITY!
+        underlying.burn(burnAmount);
+    }
+
+    function test_InheritedBurnFromBypassesRoleRestriction() public {
+        uint256 mintAmount = 1000e18;
+        uint256 burnAmount = 100e18;
+
+        // Mint tokens to user1
+        vm.prank(admin);
+        underlying.mint(user1, mintAmount);
+
+        // User1 approves user2 to spend tokens
+        vm.prank(user1);
+        underlying.approve(user2, burnAmount);
+
+        // Verify user2 has no BURNER_ROLE
+        assertFalse(underlying.hasRole(underlying.BURNER_ROLE(), user2));
+
+        // User2 should NOT be able to call the custom burn(address, uint256) function
+        vm.prank(user2);
+        vm.expectRevert();
+        underlying.burn(user1, burnAmount);
+
+        // User2 should also NOT be able to call the inherited burnFrom(address, uint256) function
+        // This SHOULD fail but currently succeeds due to the vulnerability
+        vm.prank(user2);
+        vm.expectRevert(); // This should revert but currently doesn't - SECURITY VULNERABILITY!
+        underlying.burnFrom(user1, burnAmount);
     }
 }
 
