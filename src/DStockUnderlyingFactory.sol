@@ -63,13 +63,9 @@ contract DStockUnderlyingFactory is  AccessControl {
         address compliance
     ) external onlyRole(DEPLOYER_ROLE) returns (address) {
         if (admin == address(0)) revert ZeroAddress();
-        bytes memory data = abi.encodeWithSelector(
-            IDStockUnderlyingToken.initialize.selector,
-            name_,
-            symbol_,
-            decimals_,
-            admin,
-            compliance
+        bytes memory data = abi.encodeCall(
+            IDStockUnderlyingToken.initialize,
+            (name_, symbol_, decimals_, admin, compliance)
         );
 
         BeaconProxy proxy = new BeaconProxy(
