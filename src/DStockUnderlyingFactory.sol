@@ -14,7 +14,7 @@ contract DStockUnderlyingFactory is  AccessControl {
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     /// @notice Beacon shared by all DStockUnderlying proxies
-    UpgradeableBeacon public underlyingBeacon;
+    UpgradeableBeacon immutable public underlyingBeacon;
 
     event UnderlyingCreated(
         address indexed proxy,
