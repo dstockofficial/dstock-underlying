@@ -283,6 +283,16 @@ contract DStockUnderlyingFactoryTest is Test {
         assertEq(beacon.implementation(), address(implementation2));
     }
 
+    function test_UpgradeToSameImplementationReverts() public {
+        // Get current implementation
+        address currentImpl = factory.underlyingBeacon().implementation();
+
+        // Try to upgrade to the same implementation - should revert
+        vm.prank(admin);
+        vm.expectRevert(); // This should fail initially since current code doesn't check
+        factory.upgradeImplementation(currentImpl);
+    }
+
     function test_FactoryRequiresConstructorParams() public view {
         // Factory must be deployed with implementation and admin
         // This is now enforced at deployment time via constructor

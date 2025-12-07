@@ -29,6 +29,7 @@ contract DStockUnderlyingFactory is  AccessControl {
 
     error ZeroAddress();
     error InvalidImplementation();
+    error SameImplementation();
 
     /**
      * @param impl   Initial implementation contract address
@@ -98,6 +99,7 @@ contract DStockUnderlyingFactory is  AccessControl {
     {
         if (newImplementation == address(0)) revert InvalidImplementation();
         address oldImpl = underlyingBeacon.implementation();
+        if (newImplementation == oldImpl) revert SameImplementation();
         underlyingBeacon.upgradeTo(newImplementation);
         emit ImplementationUpgraded(oldImpl, newImplementation);
     }
