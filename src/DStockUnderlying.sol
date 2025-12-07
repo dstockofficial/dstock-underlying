@@ -9,6 +9,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 
 import {IDStockUnderlyingToken} from "./interfaces/IDStockUnderlyingToken.sol";
 import {IDStockUnderlyingCompliance} from "./interfaces/IDStockUnderlyingCompliance.sol";
+import {DStockUnderlyingCompliance} from "./DStockUnderlyingCompliance.sol";
 
 /**
  * @title  DStockUnderlying
@@ -46,6 +47,7 @@ contract DStockUnderlying is
 
     error TokenPaused();
     error ValueUnchanged();
+    error InvalidComplianceConfiguration();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -133,6 +135,16 @@ contract DStockUnderlying is
         if (newCompliance == address(compliance)) {
             revert ValueUnchanged();
         }
+
+        // Validate that the compliance contract is properly configured for this token
+        if (newCompliance != address(0)) {
+            // Cast to the concrete implementation to access underlyingToken
+            DStockUnderlyingCompliance complianceImpl = DStockUnderlyingCompliance(newCompliance);
+            if (complianceImpl.underlyingToken() != address(this)) {
+                revert InvalidComplianceConfiguration();
+            }
+        }
+
         emit ComplianceChanged(address(compliance), newCompliance);
         compliance = IDStockUnderlyingCompliance(newCompliance);
     }

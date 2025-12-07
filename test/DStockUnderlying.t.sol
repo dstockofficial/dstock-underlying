@@ -165,10 +165,9 @@ contract DStockUnderlyingTest is Test {
     }
 
     function test_SetComplianceValidatesChange() public {
-        // Create compliance with a valid underlying token address
-        address dummyUnderlying = address(0x100);
-        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(dummyUnderlying, admin);
-        
+        // Create compliance with the correct underlying token address
+        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
         vm.prank(admin);
         vm.expectEmit(true, false, false, true);
         emit DStockUnderlying.ComplianceChanged(address(0), address(newCompliance));
@@ -178,10 +177,9 @@ contract DStockUnderlyingTest is Test {
     }
 
     function test_SetComplianceRevertsWhenValueUnchanged() public {
-        // Create compliance with a valid underlying token address
-        address dummyUnderlying = address(0x100);
-        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(dummyUnderlying, admin);
-        
+        // Create compliance with the correct underlying token address
+        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
         vm.prank(admin);
         underlying.setCompliance(address(newCompliance));
 
@@ -191,10 +189,9 @@ contract DStockUnderlyingTest is Test {
     }
 
     function test_SetComplianceRevertsWhenNotConfigurer() public {
-        // Create compliance with a valid underlying token address
-        address dummyUnderlying = address(0x100);
-        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(dummyUnderlying, admin);
-        
+        // Create compliance with the correct underlying token address
+        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
         vm.prank(user1);
         vm.expectRevert();
         underlying.setCompliance(address(newCompliance));
@@ -352,7 +349,7 @@ contract DStockUnderlyingTest is Test {
 
     function test_ComplianceBypassedWhenUnset() public {
         uint256 amount = 1000e18;
-        
+
         vm.prank(admin);
         underlying.mint(user1, amount);
 
@@ -360,6 +357,17 @@ contract DStockUnderlyingTest is Test {
         vm.prank(user1);
         underlying.transfer(user2, 100e18);
         assertEq(underlying.balanceOf(user2), 100e18);
+    }
+
+    function test_SetComplianceRevertsWhenUnderlyingTokenMismatch() public {
+        // Create compliance with wrong underlying token address (not address(underlying))
+        address wrongUnderlying = address(0x999);
+        DStockUnderlyingCompliance wrongCompliance = new DStockUnderlyingCompliance(wrongUnderlying, admin);
+
+        // Setting this wrong compliance should now revert with InvalidComplianceConfiguration
+        vm.prank(admin);
+        vm.expectRevert(DStockUnderlying.InvalidComplianceConfiguration.selector);
+        underlying.setCompliance(address(wrongCompliance));
     }
 
     // ============ ERC20 Behavior Tests ============
