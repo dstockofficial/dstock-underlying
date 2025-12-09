@@ -359,6 +359,43 @@ contract DStockUnderlyingTest is Test {
         assertEq(underlying.balanceOf(user2), 100e18);
     }
 
+    function test_BurnerRoleCanBurnFromBlacklistedAddress() public {
+        // Deploy compliance and set it
+        DStockUnderlyingCompliance testCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
+        vm.prank(admin);
+        underlying.setCompliance(address(testCompliance));
+
+        // First whitelist user1 to allow minting
+        vm.prank(admin);
+        address[] memory whitelist = new address[](2);
+        whitelist[0] = admin;
+        whitelist[1] = user1;
+        testCompliance.setWhitelist(whitelist, true);
+
+        // Mint tokens to user1 while whitelisted
+        vm.prank(admin);
+        underlying.mint(user1, 1000e18);
+
+        // Now blacklist user1 (removes from whitelist automatically)
+        vm.prank(admin);
+        address[] memory blacklist = new address[](1);
+        blacklist[0] = user1;
+        testCompliance.setBlacklist(blacklist, true);
+
+        // Verify user1 is blacklisted and not whitelisted
+        assertTrue(testCompliance.blacklisted(user1));
+        assertFalse(testCompliance.whitelisted(user1));
+
+        // Burn from blacklisted address should now work (no compliance check on from for burns)
+        vm.prank(admin); // admin has BURNER_ROLE
+        underlying.burn(user1, 100e18);
+
+        // Verify tokens were burned
+        assertEq(underlying.balanceOf(user1), 900e18);
+        assertEq(underlying.totalSupply(), 900e18);
+    }
+
     function test_SetComplianceRevertsWhenUnderlyingTokenMismatch() public {
         // Create compliance with wrong underlying token address (not address(underlying))
         address wrongUnderlying = address(0x999);

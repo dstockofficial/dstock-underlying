@@ -193,9 +193,15 @@ contract DStockUnderlying is
         compliance.checkIsCompliant(account);
     }
 
+
     /**
      * @dev Override ERC20Upgradeable._update to add pause and compliance checks.
      *      Called on all token transfers (mint, burn, transfer, transferFrom).
+     *
+     *      Compliance check logic:
+     *      - Mint (from == 0): check 'to' only (recipient must be compliant)
+     *      - Burn (to == 0): skip 'from' check (allow burning from any address), check 'msg.sender' if needed
+     *      - Transfer: check 'from', 'to', and 'msg.sender' (if different from from/to)
      */
     function _update(
         address from,
@@ -206,12 +212,21 @@ contract DStockUnderlying is
             revert TokenPaused();
         }
 
-        if (from != address(0)) {
+        // For transfers (from != 0 && to != 0): check sender compliance
+        // For mint (from == 0) or burn (to == 0): skip sender check
+        if (from != address(0) && to != address(0)) {
             _checkCompliance(from);
         }
+
+        // For mint or transfer: check recipient compliance
+        // For burn (to == 0): skip recipient check since burning to address(0)
         if (to != address(0)) {
             _checkCompliance(to);
         }
+
+        // Check msg.sender compliance when they are neither sender nor receiver
+        // This covers cases like transferFrom where a third party initiates the transfer
+        // Also applies to burn operations where caller should be compliant
         if (from != msg.sender && to != msg.sender && msg.sender != address(0)) {
             _checkCompliance(msg.sender);
         }
