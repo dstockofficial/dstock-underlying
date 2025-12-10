@@ -167,14 +167,6 @@ contract DStockUnderlying is
         _mint(to, amount);
     }
 
-    /// @notice Admin-driven burn, typically called by higher-level contracts
-    function burn(address from, uint256 amount)
-        external
-        onlyRole(BURNER_ROLE)
-    {
-        _burn(from, amount);
-    }
-
     /// @notice Override inherited burn function to enforce role-based access control
     function burn(uint256 value) public override onlyRole(BURNER_ROLE) {
         super.burn(value);

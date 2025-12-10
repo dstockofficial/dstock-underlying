@@ -222,16 +222,20 @@ contract DStockUnderlyingTest is Test {
         vm.prank(admin);
         underlying.mint(user1, mintAmount);
 
-        // Admin (has BURNER_ROLE) can burn
+        // User1 approves admin to burnFrom
+        vm.prank(user1);
+        underlying.approve(admin, burnAmount);
+
+        // Admin (has BURNER_ROLE) can burnFrom
         vm.prank(admin);
-        underlying.burn(user1, burnAmount);
+        underlying.burnFrom(user1, burnAmount);
         assertEq(underlying.balanceOf(user1), mintAmount - burnAmount);
         assertEq(underlying.totalSupply(), mintAmount - burnAmount);
 
-        // Non-burner cannot burn
+        // Non-burner cannot burnFrom
         vm.prank(user1);
         vm.expectRevert();
-        underlying.burn(user1, 100e18);
+        underlying.burnFrom(user1, 100e18);
     }
 
     // ============ Pausing Tests ============
@@ -284,9 +288,13 @@ contract DStockUnderlyingTest is Test {
         underlying.mint(user2, 200e18);
         assertEq(underlying.balanceOf(user2), 300e18);
 
-        // Burn still works
+        // User1 approves admin to burnFrom
+        vm.prank(user1);
+        underlying.approve(admin, 50e18);
+
+        // BurnFrom still works
         vm.prank(admin);
-        underlying.burn(user1, 50e18);
+        underlying.burnFrom(user1, 50e18);
         assertEq(underlying.balanceOf(user1), 850e18);
     }
 
@@ -377,6 +385,10 @@ contract DStockUnderlyingTest is Test {
         vm.prank(admin);
         underlying.mint(user1, 1000e18);
 
+        // User1 approves admin to burnFrom (must be done before blacklisting)
+        vm.prank(user1);
+        underlying.approve(admin, 100e18);
+
         // Now blacklist user1 (removes from whitelist automatically)
         vm.prank(admin);
         address[] memory blacklist = new address[](1);
@@ -387,9 +399,9 @@ contract DStockUnderlyingTest is Test {
         assertTrue(testCompliance.blacklisted(user1));
         assertFalse(testCompliance.whitelisted(user1));
 
-        // Burn from blacklisted address should now work (no compliance check on from for burns)
+        // BurnFrom blacklisted address should now work (no compliance check on from for burns)
         vm.prank(admin); // admin has BURNER_ROLE
-        underlying.burn(user1, 100e18);
+        underlying.burnFrom(user1, 100e18);
 
         // Verify tokens were burned
         assertEq(underlying.balanceOf(user1), 900e18);
@@ -445,10 +457,14 @@ contract DStockUnderlyingTest is Test {
         vm.prank(admin);
         underlying.mint(user1, mintAmount);
 
+        // User1 approves admin to burnFrom
+        vm.prank(user1);
+        underlying.approve(admin, burnAmount);
+
         vm.prank(admin);
         vm.expectEmit(true, true, false, true);
         emit IERC20.Transfer(user1, address(0), burnAmount);
-        underlying.burn(user1, burnAmount);
+        underlying.burnFrom(user1, burnAmount);
     }
 
     // ============ Inherited Burn Function Vulnerability Tests ============
@@ -464,10 +480,10 @@ contract DStockUnderlyingTest is Test {
         // Verify user1 has no BURNER_ROLE
         assertFalse(underlying.hasRole(underlying.BURNER_ROLE(), user1));
 
-        // User1 should NOT be able to call the custom burn(address, uint256) function
+        // User1 should NOT be able to call burnFrom(address, uint256) function
         vm.prank(user1);
         vm.expectRevert();
-        underlying.burn(user1, burnAmount);
+        underlying.burnFrom(user1, burnAmount);
 
         // User1 should also NOT be able to call the inherited burn(uint256) function
         // This SHOULD fail but currently succeeds due to the vulnerability
@@ -491,10 +507,10 @@ contract DStockUnderlyingTest is Test {
         // Verify user2 has no BURNER_ROLE
         assertFalse(underlying.hasRole(underlying.BURNER_ROLE(), user2));
 
-        // User2 should NOT be able to call the custom burn(address, uint256) function
+        // User2 should NOT be able to call burnFrom(address, uint256) function
         vm.prank(user2);
         vm.expectRevert();
-        underlying.burn(user1, burnAmount);
+        underlying.burnFrom(user1, burnAmount);
 
         // User2 should also NOT be able to call the inherited burnFrom(address, uint256) function
         // This SHOULD fail but currently succeeds due to the vulnerability
