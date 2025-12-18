@@ -147,23 +147,6 @@ contract DStockUnderlyingTest is Test {
         underlying.setSymbol(TOKEN_SYMBOL);
     }
 
-    function test_SetDecimalsUpdatesAndEmits() public {
-        uint8 newDecimals = 8;
-        
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, true);
-        emit DStockUnderlying.DecimalsChanged(TOKEN_DECIMALS, newDecimals);
-        underlying.setDecimals(newDecimals);
-
-        assertEq(underlying.decimals(), newDecimals);
-    }
-
-    function test_SetDecimalsRevertsWhenValueUnchanged() public {
-        vm.prank(admin);
-        vm.expectRevert(DStockUnderlying.ValueUnchanged.selector);
-        underlying.setDecimals(TOKEN_DECIMALS);
-    }
-
     function test_SetComplianceValidatesChange() public {
         // Create compliance with the correct underlying token address
         DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);

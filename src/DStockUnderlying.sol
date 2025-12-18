@@ -42,7 +42,6 @@ contract DStockUnderlying is
 
     event NameChanged(string oldName, string newName);
     event SymbolChanged(string oldSymbol, string newSymbol);
-    event DecimalsChanged(uint8 oldDecimals, uint8 newDecimals);
     event ComplianceChanged(address oldCompliance, address newCompliance);
 
     error TokenPaused();
@@ -118,16 +117,6 @@ contract DStockUnderlying is
         }
         emit SymbolChanged(_symbolOverride, newSymbol);
         _symbolOverride = newSymbol;
-    }
-
-    /// @notice Update token decimals
-    /// @dev    Should only be changed when safe for existing holders
-    function setDecimals(uint8 newDecimals) external onlyRole(CONFIGURER_ROLE) {
-        if (newDecimals == _decimalsOverride) {
-            revert ValueUnchanged();
-        }
-        emit DecimalsChanged(_decimalsOverride, newDecimals);
-        _decimalsOverride = newDecimals;
     }
 
     /// @notice Set or update the compliance contract

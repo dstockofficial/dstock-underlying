@@ -11,7 +11,6 @@ The following scenarios outline the unit tests that should be implemented for `D
 ## Admin Configuration
 - **setName updates and emits**: Only `CONFIGURER_ROLE` can update the name. Reverts with `ValueUnchanged` if the value is identical.
 - **setSymbol updates and emits**: Mirrors `setName` behavior.
-- **setDecimals updates and emits**: Reverts when attempting to set the same decimals.
 - **setCompliance validates change**: Accepts a new compliance address, reverts with `ValueUnchanged` if identical, and blocks calls from non-configurers.
 
 ## Minting & Burning
