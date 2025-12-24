@@ -147,28 +147,10 @@ contract DStockUnderlyingTest is Test {
         underlying.setSymbol(TOKEN_SYMBOL);
     }
 
-    function test_SetDecimalsUpdatesAndEmits() public {
-        uint8 newDecimals = 8;
-        
-        vm.prank(admin);
-        vm.expectEmit(true, false, false, true);
-        emit DStockUnderlying.DecimalsChanged(TOKEN_DECIMALS, newDecimals);
-        underlying.setDecimals(newDecimals);
-
-        assertEq(underlying.decimals(), newDecimals);
-    }
-
-    function test_SetDecimalsRevertsWhenValueUnchanged() public {
-        vm.prank(admin);
-        vm.expectRevert(DStockUnderlying.ValueUnchanged.selector);
-        underlying.setDecimals(TOKEN_DECIMALS);
-    }
-
     function test_SetComplianceValidatesChange() public {
-        // Create compliance with a valid underlying token address
-        address dummyUnderlying = address(0x100);
-        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(dummyUnderlying, admin);
-        
+        // Create compliance with the correct underlying token address
+        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
         vm.prank(admin);
         vm.expectEmit(true, false, false, true);
         emit DStockUnderlying.ComplianceChanged(address(0), address(newCompliance));
@@ -178,10 +160,9 @@ contract DStockUnderlyingTest is Test {
     }
 
     function test_SetComplianceRevertsWhenValueUnchanged() public {
-        // Create compliance with a valid underlying token address
-        address dummyUnderlying = address(0x100);
-        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(dummyUnderlying, admin);
-        
+        // Create compliance with the correct underlying token address
+        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
         vm.prank(admin);
         underlying.setCompliance(address(newCompliance));
 
@@ -191,10 +172,9 @@ contract DStockUnderlyingTest is Test {
     }
 
     function test_SetComplianceRevertsWhenNotConfigurer() public {
-        // Create compliance with a valid underlying token address
-        address dummyUnderlying = address(0x100);
-        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(dummyUnderlying, admin);
-        
+        // Create compliance with the correct underlying token address
+        DStockUnderlyingCompliance newCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
         vm.prank(user1);
         vm.expectRevert();
         underlying.setCompliance(address(newCompliance));
@@ -225,16 +205,20 @@ contract DStockUnderlyingTest is Test {
         vm.prank(admin);
         underlying.mint(user1, mintAmount);
 
-        // Admin (has BURNER_ROLE) can burn
+        // User1 approves admin to burnFrom
+        vm.prank(user1);
+        underlying.approve(admin, burnAmount);
+
+        // Admin (has BURNER_ROLE) can burnFrom
         vm.prank(admin);
-        underlying.burn(user1, burnAmount);
+        underlying.burnFrom(user1, burnAmount);
         assertEq(underlying.balanceOf(user1), mintAmount - burnAmount);
         assertEq(underlying.totalSupply(), mintAmount - burnAmount);
 
-        // Non-burner cannot burn
+        // Non-burner cannot burnFrom
         vm.prank(user1);
         vm.expectRevert();
-        underlying.burn(user1, 100e18);
+        underlying.burnFrom(user1, 100e18);
     }
 
     // ============ Pausing Tests ============
@@ -287,9 +271,13 @@ contract DStockUnderlyingTest is Test {
         underlying.mint(user2, 200e18);
         assertEq(underlying.balanceOf(user2), 300e18);
 
-        // Burn still works
+        // User1 approves admin to burnFrom
+        vm.prank(user1);
+        underlying.approve(admin, 50e18);
+
+        // BurnFrom still works
         vm.prank(admin);
-        underlying.burn(user1, 50e18);
+        underlying.burnFrom(user1, 50e18);
         assertEq(underlying.balanceOf(user1), 850e18);
     }
 
@@ -352,7 +340,7 @@ contract DStockUnderlyingTest is Test {
 
     function test_ComplianceBypassedWhenUnset() public {
         uint256 amount = 1000e18;
-        
+
         vm.prank(admin);
         underlying.mint(user1, amount);
 
@@ -360,6 +348,58 @@ contract DStockUnderlyingTest is Test {
         vm.prank(user1);
         underlying.transfer(user2, 100e18);
         assertEq(underlying.balanceOf(user2), 100e18);
+    }
+
+    function test_BurnerRoleCanBurnFromBlacklistedAddress() public {
+        // Deploy compliance and set it
+        DStockUnderlyingCompliance testCompliance = new DStockUnderlyingCompliance(address(underlying), admin);
+
+        vm.prank(admin);
+        underlying.setCompliance(address(testCompliance));
+
+        // First whitelist user1 to allow minting
+        vm.prank(admin);
+        address[] memory whitelist = new address[](2);
+        whitelist[0] = admin;
+        whitelist[1] = user1;
+        testCompliance.setWhitelist(whitelist, true);
+
+        // Mint tokens to user1 while whitelisted
+        vm.prank(admin);
+        underlying.mint(user1, 1000e18);
+
+        // User1 approves admin to burnFrom (must be done before blacklisting)
+        vm.prank(user1);
+        underlying.approve(admin, 100e18);
+
+        // Now blacklist user1 (removes from whitelist automatically)
+        vm.prank(admin);
+        address[] memory blacklist = new address[](1);
+        blacklist[0] = user1;
+        testCompliance.setBlacklist(blacklist, true);
+
+        // Verify user1 is blacklisted and not whitelisted
+        assertTrue(testCompliance.blacklisted(user1));
+        assertFalse(testCompliance.whitelisted(user1));
+
+        // BurnFrom blacklisted address should now work (no compliance check on from for burns)
+        vm.prank(admin); // admin has BURNER_ROLE
+        underlying.burnFrom(user1, 100e18);
+
+        // Verify tokens were burned
+        assertEq(underlying.balanceOf(user1), 900e18);
+        assertEq(underlying.totalSupply(), 900e18);
+    }
+
+    function test_SetComplianceRevertsWhenUnderlyingTokenMismatch() public {
+        // Create compliance with wrong underlying token address (not address(underlying))
+        address wrongUnderlying = address(0x999);
+        DStockUnderlyingCompliance wrongCompliance = new DStockUnderlyingCompliance(wrongUnderlying, admin);
+
+        // Setting this wrong compliance should now revert with InvalidComplianceConfiguration
+        vm.prank(admin);
+        vm.expectRevert(DStockUnderlying.InvalidComplianceConfiguration.selector);
+        underlying.setCompliance(address(wrongCompliance));
     }
 
     // ============ ERC20 Behavior Tests ============
@@ -396,14 +436,70 @@ contract DStockUnderlyingTest is Test {
     function test_BurnEmitsTransfer() public {
         uint256 mintAmount = 1000e18;
         uint256 burnAmount = 300e18;
-        
+
         vm.prank(admin);
         underlying.mint(user1, mintAmount);
+
+        // User1 approves admin to burnFrom
+        vm.prank(user1);
+        underlying.approve(admin, burnAmount);
 
         vm.prank(admin);
         vm.expectEmit(true, true, false, true);
         emit IERC20.Transfer(user1, address(0), burnAmount);
-        underlying.burn(user1, burnAmount);
+        underlying.burnFrom(user1, burnAmount);
+    }
+
+    // ============ Inherited Burn Function Vulnerability Tests ============
+
+    function test_InheritedBurnBypassesRoleRestriction() public {
+        uint256 mintAmount = 1000e18;
+        uint256 burnAmount = 100e18;
+
+        // Mint tokens to user1
+        vm.prank(admin);
+        underlying.mint(user1, mintAmount);
+
+        // Verify user1 has no BURNER_ROLE
+        assertFalse(underlying.hasRole(underlying.BURNER_ROLE(), user1));
+
+        // User1 should NOT be able to call burnFrom(address, uint256) function
+        vm.prank(user1);
+        vm.expectRevert();
+        underlying.burnFrom(user1, burnAmount);
+
+        // User1 should also NOT be able to call the inherited burn(uint256) function
+        // This SHOULD fail but currently succeeds due to the vulnerability
+        vm.prank(user1);
+        vm.expectRevert(); // This should revert but currently doesn't - SECURITY VULNERABILITY!
+        underlying.burn(burnAmount);
+    }
+
+    function test_InheritedBurnFromBypassesRoleRestriction() public {
+        uint256 mintAmount = 1000e18;
+        uint256 burnAmount = 100e18;
+
+        // Mint tokens to user1
+        vm.prank(admin);
+        underlying.mint(user1, mintAmount);
+
+        // User1 approves user2 to spend tokens
+        vm.prank(user1);
+        underlying.approve(user2, burnAmount);
+
+        // Verify user2 has no BURNER_ROLE
+        assertFalse(underlying.hasRole(underlying.BURNER_ROLE(), user2));
+
+        // User2 should NOT be able to call burnFrom(address, uint256) function
+        vm.prank(user2);
+        vm.expectRevert();
+        underlying.burnFrom(user1, burnAmount);
+
+        // User2 should also NOT be able to call the inherited burnFrom(address, uint256) function
+        // This SHOULD fail but currently succeeds due to the vulnerability
+        vm.prank(user2);
+        vm.expectRevert(); // This should revert but currently doesn't - SECURITY VULNERABILITY!
+        underlying.burnFrom(user1, burnAmount);
     }
 }
 

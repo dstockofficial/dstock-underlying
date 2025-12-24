@@ -14,7 +14,7 @@ contract DStockUnderlyingFactory is  AccessControl {
     bytes32 public constant UPGRADER_ROLE = keccak256("UPGRADER_ROLE");
 
     /// @notice Beacon shared by all DStockUnderlying proxies
-    UpgradeableBeacon public underlyingBeacon;
+    UpgradeableBeacon immutable public underlyingBeacon;
 
     event UnderlyingCreated(
         address indexed proxy,
@@ -29,6 +29,7 @@ contract DStockUnderlyingFactory is  AccessControl {
 
     error ZeroAddress();
     error InvalidImplementation();
+    error SameImplementation();
 
     /**
      * @param impl   Initial implementation contract address
@@ -62,13 +63,9 @@ contract DStockUnderlyingFactory is  AccessControl {
         address compliance
     ) external onlyRole(DEPLOYER_ROLE) returns (address) {
         if (admin == address(0)) revert ZeroAddress();
-        bytes memory data = abi.encodeWithSelector(
-            IDStockUnderlyingToken.initialize.selector,
-            name_,
-            symbol_,
-            decimals_,
-            admin,
-            compliance
+        bytes memory data = abi.encodeCall(
+            IDStockUnderlyingToken.initialize,
+            (name_, symbol_, decimals_, admin, compliance)
         );
 
         BeaconProxy proxy = new BeaconProxy(
@@ -98,6 +95,7 @@ contract DStockUnderlyingFactory is  AccessControl {
     {
         if (newImplementation == address(0)) revert InvalidImplementation();
         address oldImpl = underlyingBeacon.implementation();
+        if (newImplementation == oldImpl) revert SameImplementation();
         underlyingBeacon.upgradeTo(newImplementation);
         emit ImplementationUpgraded(oldImpl, newImplementation);
     }

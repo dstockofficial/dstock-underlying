@@ -9,6 +9,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 
 import {IDStockUnderlyingToken} from "./interfaces/IDStockUnderlyingToken.sol";
 import {IDStockUnderlyingCompliance} from "./interfaces/IDStockUnderlyingCompliance.sol";
+import {DStockUnderlyingCompliance} from "./DStockUnderlyingCompliance.sol";
 
 /**
  * @title  DStockUnderlying
@@ -41,11 +42,11 @@ contract DStockUnderlying is
 
     event NameChanged(string oldName, string newName);
     event SymbolChanged(string oldSymbol, string newSymbol);
-    event DecimalsChanged(uint8 oldDecimals, uint8 newDecimals);
     event ComplianceChanged(address oldCompliance, address newCompliance);
 
     error TokenPaused();
     error ValueUnchanged();
+    error InvalidComplianceConfiguration();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
@@ -118,21 +119,21 @@ contract DStockUnderlying is
         _symbolOverride = newSymbol;
     }
 
-    /// @notice Update token decimals
-    /// @dev    Should only be changed when safe for existing holders
-    function setDecimals(uint8 newDecimals) external onlyRole(CONFIGURER_ROLE) {
-        if (newDecimals == _decimalsOverride) {
-            revert ValueUnchanged();
-        }
-        emit DecimalsChanged(_decimalsOverride, newDecimals);
-        _decimalsOverride = newDecimals;
-    }
-
     /// @notice Set or update the compliance contract
     function setCompliance(address newCompliance) external onlyRole(CONFIGURER_ROLE) {
         if (newCompliance == address(compliance)) {
             revert ValueUnchanged();
         }
+
+        // Validate that the compliance contract is properly configured for this token
+        if (newCompliance != address(0)) {
+            // Cast to the concrete implementation to access underlyingToken
+            DStockUnderlyingCompliance complianceImpl = DStockUnderlyingCompliance(newCompliance);
+            if (complianceImpl.underlyingToken() != address(this)) {
+                revert InvalidComplianceConfiguration();
+            }
+        }
+
         emit ComplianceChanged(address(compliance), newCompliance);
         compliance = IDStockUnderlyingCompliance(newCompliance);
     }
@@ -155,12 +156,14 @@ contract DStockUnderlying is
         _mint(to, amount);
     }
 
-    /// @notice Admin-driven burn, typically called by higher-level contracts
-    function burn(address from, uint256 amount)
-        external
-        onlyRole(BURNER_ROLE)
-    {
-        _burn(from, amount);
+    /// @notice Override inherited burn function to enforce role-based access control
+    function burn(uint256 value) public override onlyRole(BURNER_ROLE) {
+        super.burn(value);
+    }
+
+    /// @notice Override inherited burnFrom function to enforce role-based access control
+    function burnFrom(address account, uint256 value) public override onlyRole(BURNER_ROLE) {
+        super.burnFrom(account, value);
     }
 
     /// @dev Check compliance for an account, reverts if non-compliant
@@ -171,9 +174,15 @@ contract DStockUnderlying is
         compliance.checkIsCompliant(account);
     }
 
+
     /**
      * @dev Override ERC20Upgradeable._update to add pause and compliance checks.
      *      Called on all token transfers (mint, burn, transfer, transferFrom).
+     *
+     *      Compliance check logic:
+     *      - Mint (from == 0): check 'to' only (recipient must be compliant)
+     *      - Burn (to == 0): skip 'from' check (allow burning from any address), check 'msg.sender' if needed
+     *      - Transfer: check 'from', 'to', and 'msg.sender' (if different from from/to)
      */
     function _update(
         address from,
@@ -184,12 +193,21 @@ contract DStockUnderlying is
             revert TokenPaused();
         }
 
-        if (from != address(0)) {
+        // For transfers (from != 0 && to != 0): check sender compliance
+        // For mint (from == 0) or burn (to == 0): skip sender check
+        if (from != address(0) && to != address(0)) {
             _checkCompliance(from);
         }
+
+        // For mint or transfer: check recipient compliance
+        // For burn (to == 0): skip recipient check since burning to address(0)
         if (to != address(0)) {
             _checkCompliance(to);
         }
+
+        // Check msg.sender compliance when they are neither sender nor receiver
+        // This covers cases like transferFrom where a third party initiates the transfer
+        // Also applies to burn operations where caller should be compliant
         if (from != msg.sender && to != msg.sender && msg.sender != address(0)) {
             _checkCompliance(msg.sender);
         }

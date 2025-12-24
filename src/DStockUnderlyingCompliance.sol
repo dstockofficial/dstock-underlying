@@ -68,6 +68,10 @@ contract DStockUnderlyingCompliance is IDStockUnderlyingCompliance, Ownable {
         uint256 len = users.length;
         for (uint256 i = 0; i < len; ) {
             whitelisted[users[i]] = allowed;
+            // If adding to whitelist, automatically remove from blacklist
+            if (allowed) {
+                delete blacklisted[users[i]];
+            }
             emit WhitelistUpdated(users[i], allowed);
 
             unchecked {
@@ -81,6 +85,10 @@ contract DStockUnderlyingCompliance is IDStockUnderlyingCompliance, Ownable {
         uint256 len = users.length;
         for (uint256 i = 0; i < len; ) {
             blacklisted[users[i]] = blocked;
+            // If adding to blacklist, automatically remove from whitelist
+            if (blocked) {
+                delete whitelisted[users[i]];
+            }
             emit BlacklistUpdated(users[i], blocked);
 
             unchecked {
